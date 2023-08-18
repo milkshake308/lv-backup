@@ -1,0 +1,79 @@
+#!/bin/bash
+
+function prompt_yes_no() {
+	local question="$1"
+	local default_answer="${2:-y}"
+	local answer
+
+	while true; do
+		read -rp "$question (Y/N) [${default_answer^}] " answer
+		answer="${answer:-$default_answer}"
+		case "$answer" in
+		[Yy]) return 0 ;;
+		[Nn]) return 1 ;;
+		esac
+	done
+}
+
+function command_exists() {
+	command -v "$1" >/dev/null 2>&1
+}
+
+function menu_lv() {
+	lvs | awk 'BEGIN {OFS="\t"; print "LV", "VG", "Attr\t", "LSize", "Pool", "Origin"} NR>1 {print $1, $2, $3, $4, $5, $6}'
+	echo
+	read -p "Please provide the name of the LV you want to backup :" lv_name
+	read -p $'Please provide the path to where you want to save the file ?\n' backup_path
+
+	if prompt_yes_no "Do you want to start the backup process nows ?"; then
+		./lv-backup -v $lv_name -s 10 -o $backup_path
+	fi
+}
+
+function menu_vg() {
+	vgs
+	echo
+	read -p "Please provide the name of the LV you want to backup :" vg_name
+	if vgdisplay --columns -o vg_name | grep -qw $vg_name; then
+		echo
+	else
+		echo "No VG exists with name : $vg_name"
+		exit 1
+	fi
+
+	read -p $'Please provide the path to where you want to save the file ?\n' backup_path
+	if [ ! -e $backup_path ]; then
+		echo "Path $backup_path does not exist !"
+		exit 1
+	fi
+	echo "LVs in $vg_name"
+	lvdisplay $vg_name | grep -E -e "LV Size|LV Path|LV Name|Logical volume"
+
+	if prompt_yes_no "Do you want to proceed with the backup of these LVs ?"; then
+		lvdisplay $vg_name | grep -E -e "LV Name" | awk -v RS='\n' '{print $3}' | while IFS= read -r lv; do
+			backup_lv $lv 7 $backup_path
+			sleep 1
+		done
+	fi
+}
+
+#  Pre-check
+
+command_list=("lvcreate" "lvconvert" "dd")
+
+for cmd in "${command_list[@]}"; do
+	if ! command_exists "$cmd"; then
+		echo "Command '$cmd' is missing from your system ! please install required packages before continuing or things will break !"
+		exit
+	fi
+done
+
+if [[ $1 == "lv" ]]; then
+	menu_lv
+elif [[ $1 == "vg" ]]; then
+	menu_vg
+else
+	echo "Usage: sudo $0 lv|vg"
+	echo "   lv: wizard for a specific lvm volume to backup."
+	echo "   vg: wizard for a specific lvm volume group to backup (will backup all LVs within it)."
+fi

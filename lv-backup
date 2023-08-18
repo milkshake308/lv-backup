@@ -1,0 +1,129 @@
+#!/bin/bash
+lv_name=""
+lv_snap_ratio=7
+backup_path="./"
+
+print_usage() {
+    echo "Usage: sudo $0 -v|--lvm-volume <volume_name> [-s|--snapshot-size <ratio>] [-o|--backup-dest <output_file>]"
+    echo "   -v, --lvm-volume <LV>: Specify the LVM volume name (required)."
+    echo "   -s, --snapshot-size <ratio>: Specify the snapshot ratio in % (optional)."
+    echo "   -o, --backup-dest <output_file>: Specify the backup destination path (default: current directory)."
+}
+
+#  Check if no args
+if [[ $# -eq 0 ]]; then
+    print_usage
+    exit
+fi
+
+#  Check if run as root
+if [[ $EUID -ne 0 ]]; then
+    echo "This script must be run as root."
+    print_usage
+    exit 1
+fi
+
+#  arg parser
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+    -v | --lvm-volume)
+        if [[ -n "$2" ]]; then
+            lv_name="$2"
+            shift 2
+        else
+            echo "Error: Argument for LVM volume is missing."
+            exit 1
+        fi
+        ;;
+    -s | --snapshot-size)
+        if [[ -n "$2" ]]; then
+            lv_snap_ratio="$2"
+        else
+            echo "No snapshot ratio provided assuming default value : $lv_snap_ratio%"
+        fi
+        shift 2
+        ;;
+    -o | --backup-dest)
+        if [[ -n "$2" ]]; then
+            backup_path="$2"
+        else
+            echo "No backup path provided assuming default path : $backup_path"
+            exit 1
+        fi
+        shift 2
+        ;;
+    *)
+        echo "Unknown argument: $1"
+        print_usage
+        exit 1
+        ;;
+    esac
+done
+
+#  Inputs checking
+
+if lvdisplay --columns -o lv_name | grep -qw $lv_name; then
+    echo
+else
+    echo "No LV exists with name : $lv_name"
+    exit 1
+fi
+
+if [ ! -e $backup_path ]; then
+    echo "Path $backup_path does not exist !"
+    exit 1
+fi
+
+if [lv_snap_ratio -lt 3];  then
+    echo "LV snapshot ratio cannot be > 3."
+    exit 1
+fi
+
+echo "Found LV $lv_name at $lv_path"
+
+#  Size calculation
+lv_path=$(lvdisplay --columns -o lv_path,lv_name | awk -v lv=$lv_name '$2 ~ lv {print $1}')
+lv_size=$(lvdisplay $lv_path | grep "Current LE" | awk '{print $3}')
+
+vg_name=$(lvdisplay $lv_path | grep "VG Name" | awk '{print $3}')
+vg_ext_free=$(vgdisplay --columns $vg_name -o vg_free_count | awk 'NR==2 {print $1}')
+
+function size_check(){
+if [ "$((vg_ext_free - lv_size * lv_snap_ratio / 100))" -lt 30 ]; then
+    echo "Not sufficient space on VG to allocate an temporary LVM snapshot."
+    exit 1
+elif [ $vg_ext_free -lt $((lv_size * lv_snap_ratio / 100)) ]; then
+    local new_lv_ratio = lv_snap_ratio-2
+    echo "Less than $lv_snap_ratio% of LV size is available as free space on parent VG $vg_name"
+    echo "Retrying with $new_lv_ratio% of LV size."
+    declare -g lv_snap_ratio=$new_lv_ratio
+    size_check
+fi
+}
+
+lv_snap_ext_size=$((lv_size * lv_snap_ratio / 100))
+
+function backup_lv() {
+
+    local lv_snap_name="LVR0GER_snap_$lv_name$(date +'_%d_%m_%Y__%H_%M')"
+    local lv_backup_filename="$backup_path/$lv_name-$vg_name$(date +'_%d-%m-%Y--%H-%M_%Z').img"
+
+    echo "Begin backup of $vg_name/$lv_name"
+
+    # Snapshot creation
+    echo "Creating snapshot '$lv_snap_name' of '$vg_name/$lv_name'."
+    lvcreate -n $lv_snap_name -l $lv_snap_ext_size -s $lv_path
+
+    # Copy of snapshot origin to a file
+    echo "Creating backup of snapshot origin to $lv_backup_filename."
+    dd if=$lv_path of=$lv_backup_filename bs=64k status=progress
+
+    # Delta snapshot merge
+    echo "Scheduling snapshot merge for $vg_name/$lv_snap_name."
+    lvconvert --merge $vg_name/$lv_snap_name
+
+    echo "Backup of $lv_path finished at $(date +'%d-%m-%Y--%H:%M:%S')."
+    echo "Backup file located at $lv_backup_filename"
+}
+
+backup_lv
