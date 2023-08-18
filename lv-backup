@@ -125,5 +125,3 @@ function backup_lv() {
     echo "Backup of $lv_path finished at $(date +'%d-%m-%Y--%H:%M:%S')."
     echo "Backup file located at $lv_backup_filename"
 }
-
-backup_lv

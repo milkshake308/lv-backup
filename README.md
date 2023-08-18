@@ -38,3 +38,8 @@ sudo ./lv-backup --lvm-volume mylv --backup-dest /nfs/backups/
 ```bash
 sudo ./lv-backup --lvm-volume mylv --snapshot-size 7
 ```
+- Mount a volume backup `lv-lab_14-07-2023--04-29_CEST.img` to `/mnt/mounted_bkp`
+```bash
+losetup /dev/loop1 ./lv-lab_14-07-2023--04-29_CEST.img
+mount /dev/loop1 /mnt/mounted_bkp
+```
