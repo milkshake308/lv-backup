@@ -1,6 +1,6 @@
 #!/bin/bash
 lv_name=""
-lv_snap_ratio=7
+lv_snap_ratio=16
 backup_path="./"
 
 print_usage() {
@@ -74,7 +74,7 @@ if [ ! -e $backup_path ]; then
     exit 1
 fi
 
-if [lv_snap_ratio -lt 3];  then
+if [ $lv_snap_ratio -lt 3 ];  then
     echo "LV snapshot ratio cannot be > 3."
     exit 1
 fi

@@ -26,7 +26,7 @@ function menu_lv() {
 	read -p $'Please provide the path to where you want to save the file ?\n' backup_path
 
 	if prompt_yes_no "Do you want to start the backup process nows ?"; then
-		./lv-backup -v $lv_name -s 10 -o $backup_path
+		./lv-backup -v $lv_name -o $backup_path
 	fi
 }
 
@@ -51,7 +51,7 @@ function menu_vg() {
 
 	if prompt_yes_no "Do you want to proceed with the backup of these LVs ?"; then
 		lvdisplay $vg_name | grep -E -e "LV Name" | awk -v RS='\n' '{print $3}' | while IFS= read -r lv; do
-			backup_lv $lv 7 $backup_path
+			./lv-backup -v $lv -o $backup_path
 			sleep 1
 		done
 	fi
