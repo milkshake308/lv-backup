@@ -43,3 +43,6 @@ sudo ./lv-backup --lvm-volume mylv --snapshot-size 7
 losetup /dev/loop1 ./lv-lab_14-07-2023--04-29_CEST.img
 mount /dev/loop1 /mnt/mounted_bkp
 ```
+
+## TODO
+Using lvm volume path (<vg>/<lv>) instead of lvm volume name for better reliability 
