@@ -79,11 +79,11 @@ if [ $lv_snap_ratio -lt 3 ];  then
     exit 1
 fi
 
-echo "Found LV $lv_name at $lv_path"
-
 #  Size calculation
 lv_path=$(lvdisplay --columns -o lv_path,lv_name | awk -v lv=$lv_name '$2 ~ lv {print $1}')
 lv_size=$(lvdisplay $lv_path | grep "Current LE" | awk '{print $3}')
+
+echo "Found LV $lv_name at $lv_path"
 
 vg_name=$(lvdisplay $lv_path | grep "VG Name" | awk '{print $3}')
 vg_ext_free=$(vgdisplay --columns $vg_name -o vg_free_count | awk 'NR==2 {print $1}')
@@ -125,3 +125,5 @@ function backup_lv() {
     echo "Backup of $lv_path finished at $(date +'%d-%m-%Y--%H:%M:%S')."
     echo "Backup file located at $lv_backup_filename"
 }
+
+backup_lv
